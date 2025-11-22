@@ -1,21 +1,20 @@
 package com.example.fintrack.viewmodel
 
 import android.app.Application
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
+import android.util.Log
+import androidx.compose.runtime.*
 import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.viewModelScope
-import com.example.fintrack.data.AppDatabase
 import com.example.fintrack.data.Transaction
 import com.example.fintrack.data.User
-import kotlinx.coroutines.launch
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.*
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
-    private val database = AppDatabase.getDatabase(application)
-    private val userDao = database.userDao()
-    private val transactionDao = database.transactionDao()
 
+    private val auth = FirebaseAuth.getInstance()
+    private val db = FirebaseFirestore.getInstance()
+
+    // === STATE ===
     var currentUser by mutableStateOf<User?>(null)
         private set
 
@@ -37,115 +36,190 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var errorMessage by mutableStateOf<String?>(null)
         private set
 
+    // === Firestore Listener ===
+    private var transactionListener: ListenerRegistration? = null
+    private var listenerRegistered = false
+
+
+    // INIT ---------------------------------------------------------
+    init {
+        auth.currentUser?.uid?.let {
+            loadCurrentUser {
+                startTransactionListener()
+            }
+        }
+    }
+
+
+    // REGISTER ------------------------------------------------------
     fun register(name: String, email: String, password: String, onSuccess: () -> Unit) {
         if (name.isBlank() || email.isBlank() || password.isBlank()) {
             errorMessage = "All fields are required"
             return
         }
 
-        viewModelScope.launch {
-            try {
-                isLoading = true
-                val existingUser = userDao.getUserByEmail(email)
-                if (existingUser != null) {
-                    errorMessage = "User with this email already exists"
-                    return@launch
-                }
+        isLoading = true
 
-                val user = User(name = name, email = email, password = password)
-                userDao.insertUser(user)
-                errorMessage = null
-                onSuccess()
-            } catch (e: Exception) {
-                errorMessage = "Registration failed: ${e.message}"
-            } finally {
+        auth.createUserWithEmailAndPassword(email, password)
+            .addOnSuccessListener { result ->
+                val uid = result.user!!.uid
+
+                val userData = mapOf(
+                    "id" to uid,
+                    "name" to name,
+                    "email" to email
+                )
+
+                db.collection("users")
+                    .document(uid)
+                    .set(userData)
+                    .addOnSuccessListener {
+                        errorMessage = null
+                        isLoading = false
+                        onSuccess()
+                    }
+                    .addOnFailureListener { e ->
+                        errorMessage = "Failed to save user: ${e.message}"
+                        isLoading = false
+                    }
+            }
+            .addOnFailureListener { e ->
+                errorMessage = e.message
                 isLoading = false
             }
-        }
     }
 
+
+    // LOGIN ---------------------------------------------------------
     fun login(email: String, password: String, onSuccess: () -> Unit) {
         if (email.isBlank() || password.isBlank()) {
             errorMessage = "Email and password are required"
             return
         }
 
-        viewModelScope.launch {
-            try {
-                isLoading = true
-                val user = userDao.loginUser(email, password)
-                if (user != null) {
-                    currentUser = user
-                    loadTransactions()
+        isLoading = true
+
+        auth.signInWithEmailAndPassword(email, password)
+            .addOnSuccessListener {
+
+                stopTransactionListener()  // IMPORTANT FIX
+
+                loadCurrentUser {
+                    startTransactionListener()
                     errorMessage = null
+                    isLoading = false
                     onSuccess()
-                } else {
-                    errorMessage = "Invalid email or password"
                 }
-            } catch (e: Exception) {
-                errorMessage = "Login failed: ${e.message}"
-            } finally {
+            }
+            .addOnFailureListener { e ->
+                errorMessage = e.message
                 isLoading = false
             }
-        }
     }
 
-    fun loadTransactions() {
-        currentUser?.let { user ->
-            viewModelScope.launch {
-                try {
-                    transactions = transactionDao.getTransactionsByUser(user.id)
-                    totalIncome = transactionDao.getTotalIncome(user.id) ?: 0.0
-                    totalExpense = transactionDao.getTotalExpense(user.id) ?: 0.0
-                    balance = totalIncome - totalExpense
-                } catch (e: Exception) {
-                    errorMessage = "Failed to load transactions: ${e.message}"
+
+    // LOAD USER -----------------------------------------------------
+    private fun loadCurrentUser(onLoaded: () -> Unit) {
+        val uid = auth.currentUser?.uid ?: return
+
+        db.collection("users")
+            .document(uid)
+            .get()
+            .addOnSuccessListener { doc ->
+
+                currentUser = User(
+                    id = uid,
+                    name = doc.getString("name") ?: "",
+                    email = doc.getString("email") ?: "",
+                    password = ""
+                )
+
+                onLoaded()
+            }
+            .addOnFailureListener { e ->
+                errorMessage = "Failed to load user: ${e.message}"
+            }
+    }
+
+
+    // FIRESTORE REALTIME LISTENER -----------------------------------
+    private fun startTransactionListener() {
+        val uid = auth.currentUser?.uid ?: return
+
+        Log.d("DEBUG", "Starting listener for uid=$uid")
+
+        listenerRegistered = true
+
+        transactionListener = db.collection("transactions")
+            .whereEqualTo("userId", uid)
+            .orderBy("date", Query.Direction.DESCENDING)   // requires composite index
+            .addSnapshotListener { snapshot, error ->
+
+                if (error != null) {
+                    Log.e("DEBUG", "Snapshot error: ${error.message}")
+                    errorMessage = "Failed to load transactions"
+                    return@addSnapshotListener
+                }
+
+                if (snapshot != null) {
+                    val list = snapshot.documents.map { doc ->
+                        Transaction(
+                            firestoreId = doc.id,
+                            userId = doc.getString("userId") ?: "",
+                            title = doc.getString("title") ?: "",
+                            amount = doc.getDouble("amount") ?: 0.0,
+                            type = doc.getString("type") ?: "",
+                            category = doc.getString("category") ?: "",
+                            date = doc.getString("date") ?: ""
+                        )
+                    }
+
+                    transactions = list
+                    calculateSummary()
                 }
             }
-        }
     }
 
-    fun addTransaction(
-        title: String,
-        amount: String,
-        type: String,
-        category: String,
-        date: String,
-        onSuccess: () -> Unit
-    ) {
-        if (title.isBlank() || amount.isBlank() || category.isBlank()) {
-            errorMessage = "All fields are required"
-            return
-        }
 
-        val amountValue = amount.toDoubleOrNull()
-        if (amountValue == null || amountValue <= 0) {
-            errorMessage = "Please enter a valid amount"
-            return
-        }
+    private fun stopTransactionListener() {
+        transactionListener?.remove()
+        transactionListener = null
+        listenerRegistered = false
+        Log.d("DEBUG", "Transaction listener STOPPED")
+    }
 
-        currentUser?.let { user ->
-            viewModelScope.launch {
-                try {
-                    val transaction = Transaction(
-                        userId = user.id,
-                        title = title,
-                        amount = amountValue,
-                        type = type,
-                        category = category,
-                        date = date
-                    )
-                    transactionDao.insertTransaction(transaction)
-                    loadTransactions()
-                    errorMessage = null
-                    onSuccess()
-                } catch (e: Exception) {
-                    errorMessage = "Failed to add transaction: ${e.message}"
-                }
+
+    private fun calculateSummary() {
+        totalIncome = transactions.filter { it.type == "income" }.sumOf { it.amount }
+        totalExpense = transactions.filter { it.type == "expense" }.sumOf { it.amount }
+        balance = totalIncome - totalExpense
+    }
+
+
+    // ADD ------------------------------------------------------------
+    fun addTransaction(title: String, amount: String, type: String, category: String, date: String, onSuccess: () -> Unit) {
+        val uid = auth.currentUser?.uid ?: return
+        val amountValue = amount.toDoubleOrNull() ?: 0.0
+
+        val data = mapOf(
+            "userId" to uid,
+            "title" to title,
+            "amount" to amountValue,
+            "type" to type,
+            "category" to category,
+            "date" to date
+        )
+
+        db.collection("transactions")
+            .add(data)
+            .addOnSuccessListener { onSuccess() }
+            .addOnFailureListener { e ->
+                errorMessage = "Failed to save transaction: ${e.message}"
             }
-        }
     }
 
+
+    // UPDATE ---------------------------------------------------------
     fun updateTransaction(
         transaction: Transaction,
         title: String,
@@ -155,57 +229,61 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         date: String,
         onSuccess: () -> Unit
     ) {
-        if (title.isBlank() || amount.isBlank() || category.isBlank()) {
-            errorMessage = "All fields are required"
-            return
-        }
+        val docId = transaction.firestoreId ?: return
+        val amountValue = amount.toDoubleOrNull() ?: 0.0
 
-        val amountValue = amount.toDoubleOrNull()
-        if (amountValue == null || amountValue <= 0) {
-            errorMessage = "Please enter a valid amount"
-            return
-        }
+        val updates = mapOf(
+            "title" to title,
+            "amount" to amountValue,
+            "type" to type,
+            "category" to category,
+            "date" to date
+        )
 
-        viewModelScope.launch {
-            try {
-                val updatedTransaction = transaction.copy(
-                    title = title,
-                    amount = amountValue,
-                    type = type,
-                    category = category,
-                    date = date
-                )
-                transactionDao.updateTransaction(updatedTransaction)
-                loadTransactions()
-                errorMessage = null
-                onSuccess()
-            } catch (e: Exception) {
-                errorMessage = "Failed to update transaction: ${e.message}"
+        db.collection("transactions")
+            .document(docId)
+            .update(updates)
+            .addOnSuccessListener { onSuccess() }
+            .addOnFailureListener { e ->
+                errorMessage = "Failed to update: ${e.message}"
             }
-        }
     }
 
+
+    // DELETE ---------------------------------------------------------
     fun deleteTransaction(transaction: Transaction) {
-        viewModelScope.launch {
-            try {
-                transactionDao.deleteTransaction(transaction)
-                loadTransactions()
-            } catch (e: Exception) {
-                errorMessage = "Failed to delete transaction: ${e.message}"
+        val docId = transaction.firestoreId ?: return
+
+        db.collection("transactions")
+            .document(docId)
+            .delete()
+            .addOnFailureListener { e ->
+                errorMessage = "Failed to delete: ${e.message}"
             }
-        }
     }
 
+
+    // UTILITIES ------------------------------------------------------
     fun clearError() {
         errorMessage = null
     }
 
+    fun setError(msg: String?) {
+        errorMessage = msg
+    }
+
+
     fun logout() {
+        stopTransactionListener()  // VERY IMPORTANT
+
+        auth.signOut()
         currentUser = null
         transactions = emptyList()
         totalIncome = 0.0
         totalExpense = 0.0
         balance = 0.0
         errorMessage = null
+
+        Log.d("DEBUG", "User logged out and state cleared")
     }
 }

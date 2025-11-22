@@ -29,11 +29,13 @@ fun HomeScreen(
     onNavigateToEditTransaction: (Transaction) -> Unit,
     onLogout: () -> Unit
 ) {
-    LaunchedEffect(Unit) {
-        viewModel.loadTransactions()
-    }
 
-    // ====== STATE FILTER ======
+    val transactions = viewModel.transactions
+    val income = viewModel.totalIncome
+    val expense = viewModel.totalExpense
+    val balance = viewModel.balance
+
+    // FILTER
     var showFilterDialog by remember { mutableStateOf(false) }
     var filterFrom by remember { mutableStateOf<String?>(null) }
     var filterTo by remember { mutableStateOf<String?>(null) }
@@ -45,13 +47,10 @@ fun HomeScreen(
         "Gaji", "Kesehatan", "Hiburan", "Lainnya"
     )
 
-    // ====== LOGIC FILTER ======
-    val filteredTransactions = viewModel.transactions.filter { t ->
-        val date = t.date
-
+    val filteredTransactions = transactions.filter { t ->
         val datePass =
-            (filterFrom.isNullOrBlank() || date >= filterFrom!!) &&
-                    (filterTo.isNullOrBlank() || date <= filterTo!!)
+            (filterFrom.isNullOrBlank() || t.date >= filterFrom!!) &&
+                    (filterTo.isNullOrBlank() || t.date <= filterTo!!)
 
         val typePass = filterType == "All" || t.type == filterType
         val catPass = filterCategory == "All" || t.category == filterCategory
@@ -81,11 +80,10 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(16.dp)
         ) {
 
-            // ====== SUMMARY ======
+            // SUMMARY CARDS
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -93,13 +91,13 @@ fun HomeScreen(
                 ) {
                     SummaryCard(
                         title = "Income",
-                        amount = viewModel.totalIncome,
+                        amount = income,
                         color = Color(0xFF4CAF50),
                         modifier = Modifier.weight(1f)
                     )
                     SummaryCard(
                         title = "Expense",
-                        amount = viewModel.totalExpense,
+                        amount = expense,
                         color = Color(0xFFF44336),
                         modifier = Modifier.weight(1f)
                     )
@@ -109,13 +107,13 @@ fun HomeScreen(
             item {
                 SummaryCard(
                     title = "Balance",
-                    amount = viewModel.balance,
-                    color = if (viewModel.balance >= 0) Color(0xFF2196F3) else Color(0xFFF44336),
+                    amount = balance,
+                    color = if (balance >= 0) Color(0xFF2196F3) else Color(0xFFF44336),
                     modifier = Modifier.fillMaxWidth()
                 )
             }
 
-            // ====== TITLE + FILTER BUTTON ======
+            // HEADER + FILTER BUTTON
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -134,7 +132,7 @@ fun HomeScreen(
                 }
             }
 
-            // ====== LIST TRANSAKSI ======
+            // LIST
             if (filteredTransactions.isEmpty()) {
                 item {
                     Card(
@@ -156,7 +154,13 @@ fun HomeScreen(
                     }
                 }
             } else {
-                items(filteredTransactions) { transaction ->
+
+                // 🔥 FIX UTAMA: key SELALU unik
+                items(
+                    filteredTransactions,
+                    key = { it.firestoreId ?: it.hashCode().toString() }
+                ) { transaction ->
+
                     TransactionItem(
                         transaction = transaction,
                         onEdit = { onNavigateToEditTransaction(transaction) },
@@ -167,7 +171,6 @@ fun HomeScreen(
         }
     }
 
-    // ====== DIALOG FILTER ======
     if (showFilterDialog) {
         FilterDialog(
             from = filterFrom,
@@ -175,11 +178,11 @@ fun HomeScreen(
             type = filterType,
             category = filterCategory,
             categories = categories,
-            onApply = { from, to, type, cat ->
+            onApply = { from, to, type, category ->
                 filterFrom = from
                 filterTo = to
                 filterType = type
-                filterCategory = cat
+                filterCategory = category
                 showFilterDialog = false
             },
             onCancel = { showFilterDialog = false }
@@ -219,38 +222,36 @@ fun FilterDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
 
-                // ====== DATE FROM ======
+                // DATE FROM
                 Text("Date From (yyyy-MM-dd)")
-                OutlinedButton(onClick = {
-                    showDatePicker(
-                        context = context,
-                        onDateSelected = { tempFrom = it }
-                    )
-                }) {
-                    Text(text = tempFrom ?: "Select Date")
+                OutlinedButton(
+                    onClick = {
+                        showDatePicker(context) { tempFrom = it }
+                    }
+                ) {
+                    Text(tempFrom ?: "Select Date")
                 }
 
-                // ====== DATE TO ======
+                // DATE TO
                 Text("Date To (yyyy-MM-dd)")
-                OutlinedButton(onClick = {
-                    showDatePicker(
-                        context = context,
-                        onDateSelected = { tempTo = it }
-                    )
-                }) {
-                    Text(text = tempTo ?: "Select Date")
+                OutlinedButton(
+                    onClick = {
+                        showDatePicker(context) { tempTo = it }
+                    }
+                ) {
+                    Text(tempTo ?: "Select Date")
                 }
 
-                // ====== TYPE (All / Income / Expenses) ======
-                Text("Jenis")
+                // TYPE
+                Text("Type")
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChipItem("All", tempType == "All") { tempType = "All" }
                     FilterChipItem("Income", tempType == "income") { tempType = "income" }
                     FilterChipItem("Expenses", tempType == "expense") { tempType = "expense" }
                 }
 
-                // ====== CATEGORY DROPDOWN ======
-                Text("Kategori")
+                // CATEGORY
+                Text("Category")
                 var expanded by remember { mutableStateOf(false) }
 
                 ExposedDropdownMenuBox(
@@ -264,8 +265,8 @@ fun FilterDialog(
                         label = { Text("Category") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
                         modifier = Modifier
-                            .menuAnchor()
                             .fillMaxWidth()
+                            .menuAnchor()
                     )
 
                     ExposedDropdownMenu(
@@ -300,9 +301,8 @@ private fun showDatePicker(
     DatePickerDialog(
         context,
         { _, y, m, d ->
-            val realMonth = m + 1
-            val dateStr = String.format("%04d-%02d-%02d", y, realMonth, d)
-            onDateSelected(dateStr)
+            val date = String.format("%04d-%02d-%02d", y, m + 1, d)
+            onDateSelected(date)
         },
         year,
         month,
@@ -322,39 +322,6 @@ fun FilterChipItem(label: String, selected: Boolean, onClick: () -> Unit) {
                 MaterialTheme.colorScheme.surfaceVariant
         )
     )
-}
-
-@Composable
-fun SummaryCard(
-    title: String,
-    amount: Double,
-    color: Color,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier,
-        elevation = CardDefaults.cardElevation(4.dp),
-        colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.1f))
-    ) {
-        Column(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
-            horizontalAlignment = Alignment.Start     // *** RATA KIRI ***
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyMedium,
-                color = color
-            )
-            Text(
-                text = formatRupiah(amount),
-                style = MaterialTheme.typography.headlineSmall,
-                color = color,
-                fontWeight = FontWeight.Bold
-            )
-        }
-    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -379,12 +346,7 @@ fun TransactionItem(
             verticalAlignment = Alignment.CenterVertically
         ) {
 
-            // ==========================
-            // Kiri: Title + Category + Date
-            // ==========================
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = transaction.title,
                     style = MaterialTheme.typography.titleMedium,
@@ -397,29 +359,18 @@ fun TransactionItem(
                 )
             }
 
-            // ==========================
-            // Kanan: Amount + Delete (mepet kanan)
-            // ==========================
-            Row(
-                modifier = Modifier
-                    .fillMaxHeight(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-
-                // Nominal
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = (if (isIncome) "+ " else "- ") + formatRupiah(transaction.amount),
                     style = MaterialTheme.typography.titleMedium,
                     color = color,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(end = 12.dp)   // jarak sebelum icon bin
+                    modifier = Modifier.padding(end = 12.dp)
                 )
 
-                // Tombol Delete
                 IconButton(
                     onClick = onDelete,
-                    modifier = Modifier.size(28.dp)             // lebih kecil & rapi
+                    modifier = Modifier.size(28.dp)
                 ) {
                     Icon(
                         Icons.Default.Delete,
@@ -432,3 +383,54 @@ fun TransactionItem(
     }
 }
 
+
+@Composable
+fun SummaryCard(
+    title: String,
+    amount: Double,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier,
+        elevation = CardDefaults.cardElevation(4.dp),
+        colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.1f))
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+
+            // Title
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                color = color
+            )
+
+            // Row agar Rp + angka SELALU sejajar dan satu baris
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Rp",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = color,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(modifier = Modifier.width(4.dp))
+
+                Text(
+                    text = formatRupiah(amount).replace("Rp ", ""), // buang "Rp " biar custom
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = color,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}

@@ -24,16 +24,18 @@ fun AddTransactionScreen(
 ) {
     var title by remember { mutableStateOf("") }
 
-    // Raw digits only (untuk disimpan)
+    // angka murni
     var amountRaw by remember { mutableStateOf("") }
 
-    // TextField controller
     var amountText by remember { mutableStateOf(TextFieldValue("")) }
 
     // Category Dropdown
     val categoryList = listOf("Makan", "Transport", "Belanja", "Tagihan", "Gaji", "Kesehatan", "Hiburan", "Lainnya")
+
     var expanded by remember { mutableStateOf(false) }
-    var selectedCategory by remember { mutableStateOf("") }
+
+    // FIX: set default category
+    var selectedCategory by remember { mutableStateOf(categoryList.first()) }
 
     var type by remember { mutableStateOf("expense") }
 
@@ -68,21 +70,17 @@ fun AddTransactionScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // AMOUNT WITH RUPIAH AUTO FORMAT
+            // AMOUNT WITH FORMAT
             OutlinedTextField(
                 value = amountText,
                 onValueChange = { newValue ->
 
-                    // Ambil angka saja
                     val digits = newValue.text.filter { it.isDigit() }
 
                     amountRaw = digits
 
-                    val formatted = if (digits.isNotEmpty()) {
-                        formatRupiah(digits.toDouble())
-                    } else ""
+                    val formatted = if (digits.isNotEmpty()) formatRupiah(digits.toDouble()) else ""
 
-                    // Set text + cursor di ujung → FIX BUG
                     amountText = TextFieldValue(
                         text = formatted,
                         selection = TextRange(formatted.length)
@@ -93,7 +91,7 @@ fun AddTransactionScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // CATEGORY DROPDOWN
+            // CATEGORY
             ExposedDropdownMenuBox(
                 expanded = expanded,
                 onExpandedChange = { expanded = !expanded }
@@ -101,8 +99,8 @@ fun AddTransactionScreen(
                 OutlinedTextField(
                     value = selectedCategory,
                     onValueChange = {},
-                    readOnly = true,
                     label = { Text("Category") },
+                    readOnly = true,
                     modifier = Modifier
                         .fillMaxWidth()
                         .menuAnchor(),
@@ -125,7 +123,7 @@ fun AddTransactionScreen(
                 }
             }
 
-            // TYPE SELECTION
+            // TYPE
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 elevation = CardDefaults.cardElevation(4.dp)
@@ -179,7 +177,7 @@ fun AddTransactionScreen(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // SAVE / CANCEL
+            // BUTTON
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -192,7 +190,12 @@ fun AddTransactionScreen(
                 Button(
                     onClick = {
 
-                        val finalAmount = amountRaw.toDoubleOrNull() ?: 0.0
+                        if (amountRaw.isBlank()) {
+                            viewModel.setError("Amount cannot be empty")
+                            return@Button
+                        }
+
+                        val finalAmount = amountRaw.toDouble()
 
                         viewModel.addTransaction(
                             title = title,
@@ -202,7 +205,6 @@ fun AddTransactionScreen(
                             date = currentDate,
                             onSuccess = onNavigateBack
                         )
-
                     },
                     modifier = Modifier.weight(1f)
                 ) {

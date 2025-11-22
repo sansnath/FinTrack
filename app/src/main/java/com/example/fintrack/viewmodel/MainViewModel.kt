@@ -102,7 +102,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         auth.signInWithEmailAndPassword(email, password)
             .addOnSuccessListener {
 
-                stopTransactionListener()  // IMPORTANT FIX
+                stopTransactionListener()
 
                 loadCurrentUser {
                     startTransactionListener()
@@ -152,7 +152,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         transactionListener = db.collection("transactions")
             .whereEqualTo("userId", uid)
-            .orderBy("date", Query.Direction.DESCENDING)   // requires composite index
+            .orderBy("date", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, error ->
 
                 if (error != null) {
@@ -274,7 +274,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
 
     fun logout() {
-        stopTransactionListener()  // VERY IMPORTANT
+        stopTransactionListener()
 
         auth.signOut()
         currentUser = null

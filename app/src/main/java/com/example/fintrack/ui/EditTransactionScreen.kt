@@ -26,14 +26,12 @@ fun EditTransactionScreen(
 ) {
     var title by remember { mutableStateOf(transaction.title) }
 
-    // RAW amount ONLY digits (from database)
     var amountRaw by remember {
         mutableStateOf(
             transaction.amount.toString().replace(".", "").replace(",", "")
         )
     }
 
-    // TEXTFIELD controller with formatted initial value
     var amountText by remember {
         mutableStateOf(
             TextFieldValue(
@@ -43,7 +41,6 @@ fun EditTransactionScreen(
         )
     }
 
-    // CATEGORY dropdown
     val categoryList = listOf("Makan", "Transport", "Belanja", "Tagihan", "Gaji", "Kesehatan", "Hiburan", "Lainnya")
     var expanded by remember { mutableStateOf(false) }
     var selectedCategory by remember { mutableStateOf(transaction.category) }
@@ -84,7 +81,6 @@ fun EditTransactionScreen(
                 value = amountText,
                 onValueChange = { newValue ->
 
-                    // keep digits only
                     val digits = newValue.text.filter { it.isDigit() }
                     amountRaw = digits
 

@@ -24,7 +24,6 @@ fun AddTransactionScreen(
 ) {
     var title by remember { mutableStateOf("") }
 
-    // angka murni
     var amountRaw by remember { mutableStateOf("") }
 
     var amountText by remember { mutableStateOf(TextFieldValue("")) }
@@ -34,7 +33,6 @@ fun AddTransactionScreen(
 
     var expanded by remember { mutableStateOf(false) }
 
-    // FIX: set default category
     var selectedCategory by remember { mutableStateOf(categoryList.first()) }
 
     var type by remember { mutableStateOf("expense") }
@@ -70,7 +68,6 @@ fun AddTransactionScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // AMOUNT WITH FORMAT
             OutlinedTextField(
                 value = amountText,
                 onValueChange = { newValue ->

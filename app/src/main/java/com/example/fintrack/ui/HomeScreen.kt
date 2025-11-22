@@ -155,7 +155,6 @@ fun HomeScreen(
                 }
             } else {
 
-                // 🔥 FIX UTAMA: key SELALU unik
                 items(
                     filteredTransactions,
                     key = { it.firestoreId ?: it.hashCode().toString() }
@@ -410,7 +409,7 @@ fun SummaryCard(
                 color = color
             )
 
-            // Row agar Rp + angka SELALU sejajar dan satu baris
+
             Row(
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -424,7 +423,7 @@ fun SummaryCard(
                 Spacer(modifier = Modifier.width(4.dp))
 
                 Text(
-                    text = formatRupiah(amount).replace("Rp ", ""), // buang "Rp " biar custom
+                    text = formatRupiah(amount).replace("Rp ", ""),
                     style = MaterialTheme.typography.headlineSmall,
                     color = color,
                     fontWeight = FontWeight.Bold,

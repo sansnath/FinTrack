@@ -1,6 +1,7 @@
 package com.example.fintrack.ui
 
 import android.app.DatePickerDialog
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -12,14 +13,19 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.fintrack.data.Transaction
 import com.example.fintrack.utils.formatRupiah
 import com.example.fintrack.viewmodel.MainViewModel
-import java.util.Calendar
+import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -30,12 +36,14 @@ fun HomeScreen(
     onLogout: () -> Unit
 ) {
 
+    val currentUser = viewModel.currentUser
     val transactions = viewModel.transactions
+
     val income = viewModel.totalIncome
     val expense = viewModel.totalExpense
     val balance = viewModel.balance
 
-    // FILTER
+    // FILTER STATES
     var showFilterDialog by remember { mutableStateOf(false) }
     var filterFrom by remember { mutableStateOf<String?>(null) }
     var filterTo by remember { mutableStateOf<String?>(null) }
@@ -47,6 +55,7 @@ fun HomeScreen(
         "Gaji", "Kesehatan", "Hiburan", "Lainnya"
     )
 
+    // FILTER LOGIC
     val filteredTransactions = transactions.filter { t ->
         val datePass =
             (filterFrom.isNullOrBlank() || t.date >= filterFrom!!) &&
@@ -61,7 +70,11 @@ fun HomeScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Welcome, ${viewModel.currentUser?.name ?: "User"}") },
+                title = { Text("Welcome, ${currentUser?.name ?: "User"}") },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                ),
                 actions = {
                     IconButton(onClick = onLogout) {
                         Icon(Icons.Default.ExitToApp, contentDescription = "Logout")
@@ -70,7 +83,10 @@ fun HomeScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = onNavigateToAddTransaction) {
+            FloatingActionButton(
+                onClick = onNavigateToAddTransaction,
+                containerColor = MaterialTheme.colorScheme.primary
+            ) {
                 Icon(Icons.Default.Add, contentDescription = "Add Transaction")
             }
         }
@@ -80,7 +96,8 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(16.dp)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
 
             // SUMMARY CARDS
@@ -123,7 +140,8 @@ fun HomeScreen(
                     Text(
                         text = "Recent Transactions",
                         style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(vertical = 8.dp)
                     )
 
                     TextButton(onClick = { showFilterDialog = true }) {
@@ -132,7 +150,7 @@ fun HomeScreen(
                 }
             }
 
-            // LIST
+            // TRANSACTION LIST
             if (filteredTransactions.isEmpty()) {
                 item {
                     Card(
@@ -146,7 +164,7 @@ fun HomeScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "No transactions yet.\nTap + to add your first transaction!",
+                                text = "No transactions found.\nTry adjusting your filter.",
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -154,12 +172,10 @@ fun HomeScreen(
                     }
                 }
             } else {
-
                 items(
                     filteredTransactions,
                     key = { it.firestoreId ?: it.hashCode().toString() }
                 ) { transaction ->
-
                     TransactionItem(
                         transaction = transaction,
                         onEdit = { onNavigateToEditTransaction(transaction) },
@@ -188,6 +204,73 @@ fun HomeScreen(
         )
     }
 }
+@Composable
+fun AutoResizedText(
+    text: String,
+    color: Color,
+    modifier: Modifier = Modifier,
+    fontWeight: FontWeight = FontWeight.ExtraBold,
+    maxFontSize: TextUnit = MaterialTheme.typography.headlineSmall.fontSize,
+    minFontSize: TextUnit = 12.sp
+) {
+    var textStyle by remember {
+        mutableStateOf(TextStyle(fontSize = maxFontSize, fontWeight = fontWeight, color = color))
+    }
+    var ready by remember { mutableStateOf(false) }
+
+    Text(
+        text = text,
+        style = textStyle,
+        maxLines = 1,
+        softWrap = false,
+        overflow = TextOverflow.Clip,
+        modifier = modifier.drawWithContent {
+            if (ready) drawContent()
+        },
+        onTextLayout = { result ->
+            if (!ready) {
+                if (result.didOverflowWidth && textStyle.fontSize > minFontSize) {
+                    textStyle = textStyle.copy(fontSize = textStyle.fontSize * 0.9f)
+                } else {
+                    ready = true
+                }
+            }
+        }
+    )
+}
+
+@Composable
+fun SummaryCard(
+    title: String,
+    amount: Double,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier,
+        elevation = CardDefaults.elevatedCardElevation(4.dp),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp).fillMaxWidth(),
+            horizontalAlignment = Alignment.Start
+        ) {
+
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            AutoResizedText(
+                text = formatRupiah(amount),
+                color = color,
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+            )
+        }
+    }
+}
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -221,35 +304,27 @@ fun FilterDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
 
-                // DATE FROM
                 Text("Date From (yyyy-MM-dd)")
-                OutlinedButton(
-                    onClick = {
-                        showDatePicker(context) { tempFrom = it }
-                    }
-                ) {
+                OutlinedButton(onClick = {
+                    showDatePicker(context) { tempFrom = it }
+                }) {
                     Text(tempFrom ?: "Select Date")
                 }
 
-                // DATE TO
                 Text("Date To (yyyy-MM-dd)")
-                OutlinedButton(
-                    onClick = {
-                        showDatePicker(context) { tempTo = it }
-                    }
-                ) {
+                OutlinedButton(onClick = {
+                    showDatePicker(context) { tempTo = it }
+                }) {
                     Text(tempTo ?: "Select Date")
                 }
 
-                // TYPE
                 Text("Type")
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChipItem("All", tempType == "All") { tempType = "All" }
-                    FilterChipItem("Income", tempType == "income") { tempType = "income" }
-                    FilterChipItem("Expenses", tempType == "expense") { tempType = "expense" }
+                    FilterChipItem("income", tempType == "income") { tempType = "income" }
+                    FilterChipItem("expense", tempType == "expense") { tempType = "expense" }
                 }
 
-                // CATEGORY
                 Text("Category")
                 var expanded by remember { mutableStateOf(false) }
 
@@ -263,9 +338,7 @@ fun FilterDialog(
                         readOnly = true,
                         label = { Text("Category") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .menuAnchor()
+                        modifier = Modifier.fillMaxWidth().menuAnchor()
                     )
 
                     ExposedDropdownMenu(
@@ -288,6 +361,98 @@ fun FilterDialog(
     )
 }
 
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TransactionItem(
+    transaction: Transaction,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val isIncome = transaction.type == "income"
+    val color = if (isIncome) Color(0xFF4CAF50) else Color(0xFFF44336)
+
+    Card(
+        onClick = onEdit,
+        modifier = Modifier
+            .fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        shape = MaterialTheme.shapes.medium
+    ) {
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+
+            Box(
+                modifier = Modifier
+                    .width(6.dp)
+                    .height(40.dp)
+                    .background(color, shape = MaterialTheme.shapes.small)
+            )
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // === TEXT SECTION ===
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = transaction.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium
+                )
+
+                Text(
+                    text = "${transaction.category} • ${transaction.date}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            // === AMOUNT + DELETE ===
+            Row(verticalAlignment = Alignment.CenterVertically) {
+
+                Text(
+                    text = (if (isIncome) "+ " else "- ") + formatRupiah(transaction.amount),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = color,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(end = 10.dp)
+                )
+
+                IconButton(
+                    onClick = onDelete,
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "Delete",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun FilterChipItem(label: String, selected: Boolean, onClick: () -> Unit) {
+    AssistChip(
+        onClick = onClick,
+        label = { Text(label) },
+        colors = AssistChipDefaults.assistChipColors(
+            containerColor = if (selected)
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+            else
+                MaterialTheme.colorScheme.surfaceVariant
+        )
+    )
+}
+
 private fun showDatePicker(
     context: android.content.Context,
     onDateSelected: (String) -> Unit
@@ -307,129 +472,4 @@ private fun showDatePicker(
         month,
         day
     ).show()
-}
-
-@Composable
-fun FilterChipItem(label: String, selected: Boolean, onClick: () -> Unit) {
-    AssistChip(
-        onClick = onClick,
-        label = { Text(label) },
-        colors = AssistChipDefaults.assistChipColors(
-            containerColor = if (selected)
-                MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
-            else
-                MaterialTheme.colorScheme.surfaceVariant
-        )
-    )
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun TransactionItem(
-    transaction: Transaction,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit
-) {
-    val isIncome = transaction.type == "income"
-    val color = if (isIncome) Color(0xFF4CAF50) else Color(0xFFF44336)
-
-    Card(
-        onClick = onEdit,
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(2.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = transaction.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = "${transaction.category} • ${transaction.date}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = (if (isIncome) "+ " else "- ") + formatRupiah(transaction.amount),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = color,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(end = 12.dp)
-                )
-
-                IconButton(
-                    onClick = onDelete,
-                    modifier = Modifier.size(28.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Delete,
-                        contentDescription = "Delete",
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                }
-            }
-        }
-    }
-}
-
-
-@Composable
-fun SummaryCard(
-    title: String,
-    amount: Double,
-    color: Color,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier,
-        elevation = CardDefaults.cardElevation(4.dp),
-        colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.1f))
-    ) {
-        Column(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-
-            // Title
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyMedium,
-                color = color
-            )
-
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Rp",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = color,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Spacer(modifier = Modifier.width(4.dp))
-
-                Text(
-                    text = formatRupiah(amount).replace("Rp ", ""),
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = color,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1
-                )
-            }
-        }
-    }
 }

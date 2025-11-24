@@ -1,7 +1,6 @@
 package com.example.fintrack.ui
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -10,12 +9,16 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import com.example.fintrack.data.Transaction
+import com.example.fintrack.ui.theme.Expense
+import com.example.fintrack.ui.theme.Income
 import com.example.fintrack.utils.formatRupiah
 import com.example.fintrack.viewmodel.MainViewModel
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,6 +35,7 @@ fun EditTransactionScreen(
         )
     }
 
+    // TEXT dengan format Rupiah
     var amountText by remember {
         mutableStateOf(
             TextFieldValue(
@@ -51,6 +55,10 @@ fun EditTransactionScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Edit Transaction") },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                ),
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
@@ -64,7 +72,7 @@ fun EditTransactionScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(16.dp),
+                .padding(horizontal = 24.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
 
@@ -73,14 +81,14 @@ fun EditTransactionScreen(
                 value = title,
                 onValueChange = { title = it },
                 label = { Text("Title") },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
             )
 
-            // AMOUNT WITH AUTO RUPIAH FORMAT
+            // AMOUNT (format Rupiah)
             OutlinedTextField(
                 value = amountText,
                 onValueChange = { newValue ->
-
                     val digits = newValue.text.filter { it.isDigit() }
                     amountRaw = digits
 
@@ -95,7 +103,8 @@ fun EditTransactionScreen(
                 },
                 label = { Text("Amount") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
             )
 
             // CATEGORY DROPDOWN
@@ -132,98 +141,72 @@ fun EditTransactionScreen(
                 }
             }
 
-            // TYPE RADIO
-            Card(
+            // TYPE PICKER
+            Text(
+                text = "Transaction Type",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                elevation = CardDefaults.cardElevation(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Text(
-                        text = "Transaction Type",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
+                TypeSelectionCard(
+                    label = "Income",
+                    selected = type == "income",
+                    onClick = { type = "income" },
+                    color = Income,
+                    modifier = Modifier.weight(1f)
+                )
 
-                    Row(modifier = Modifier.fillMaxWidth()) {
-
-                        Row(
-                            modifier = Modifier
-                                .selectable(
-                                    selected = type == "income",
-                                    onClick = { type = "income" }
-                                )
-                                .weight(1f),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = type == "income",
-                                onClick = { type = "income" }
-                            )
-                            Text("Income")
-                        }
-
-                        Row(
-                            modifier = Modifier
-                                .selectable(
-                                    selected = type == "expense",
-                                    onClick = { type = "expense" }
-                                )
-                                .weight(1f),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = type == "expense",
-                                onClick = { type = "expense" }
-                            )
-                            Text("Expense")
-                        }
-                    }
-                }
+                TypeSelectionCard(
+                    label = "Expense",
+                    selected = type == "expense",
+                    onClick = { type = "expense" },
+                    color = Expense,
+                    modifier = Modifier.weight(1f)
+                )
             }
 
             if (viewModel.errorMessage != null) {
                 Text(
                     text = viewModel.errorMessage!!,
-                    color = MaterialTheme.colorScheme.error
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
                 )
             }
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // BUTTONS
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            // UPDATE BUTTON
+            Button(
+                onClick = {
+                    val finalAmount = amountRaw.toDoubleOrNull() ?: 0.0
+
+                    viewModel.updateTransaction(
+                        transaction = transaction,
+                        title = title,
+                        amount = finalAmount.toString(),
+                        type = type,
+                        category = selectedCategory,
+                        date = transaction.date,
+                        onSuccess = onNavigateBack
+                    )
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp)
             ) {
+                Text("Update Transaction", style = MaterialTheme.typography.titleMedium)
+            }
 
-                OutlinedButton(
-                    onClick = onNavigateBack,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("Cancel")
-                }
-
-                Button(
-                    onClick = {
-
-                        val finalAmount = amountRaw.toDoubleOrNull() ?: 0.0
-
-                        viewModel.updateTransaction(
-                            transaction = transaction,
-                            title = title,
-                            amount = finalAmount.toString(),
-                            type = type,
-                            category = selectedCategory,
-                            date = transaction.date,
-                            onSuccess = onNavigateBack
-                        )
-                    },
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("Update")
-                }
+            OutlinedButton(
+                onClick = onNavigateBack,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Cancel")
             }
         }
     }

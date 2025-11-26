@@ -41,7 +41,6 @@ fun FinTrackApp(viewModel: MainViewModel) {
     val navController = rememberNavController()
     var editTransaction by remember { mutableStateOf<Transaction?>(null) }
 
-    // clear error setiap pindah halaman
     LaunchedEffect(navController) {
         navController.addOnDestinationChangedListener { _, _, _ ->
             viewModel.clearError()
@@ -60,9 +59,7 @@ fun FinTrackApp(viewModel: MainViewModel) {
                         popUpTo("login") { inclusive = true }
                     }
                 },
-                onNavigateToRegister = {
-                    navController.navigate("register")
-                }
+                onNavigateToRegister = { navController.navigate("register") }
             )
         }
 
@@ -81,7 +78,12 @@ fun FinTrackApp(viewModel: MainViewModel) {
         composable("home") {
             HomeScreen(
                 viewModel = viewModel,
-                onNavigateToAddTransaction = { navController.navigate("add_transaction") },
+                onNavigateToAnalytics = {
+                    navController.navigate("analytics")
+                },
+                onNavigateToAddTransaction = {
+                    navController.navigate("add_transaction")
+                },
                 onNavigateToEditTransaction = { transaction ->
                     editTransaction = transaction
                     navController.navigate("edit_transaction")
@@ -110,6 +112,14 @@ fun FinTrackApp(viewModel: MainViewModel) {
                     navController.popBackStack()
                 }
             }
+        }
+
+        // 🔥 NEW: ANALYTICS SCREEN
+        composable("analytics") {
+            AnalyticsScreen(
+                viewModel = viewModel,
+                onBack = { navController.popBackStack() }
+            )
         }
     }
 }

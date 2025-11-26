@@ -25,12 +25,14 @@ import androidx.compose.ui.unit.sp
 import com.example.fintrack.data.Transaction
 import com.example.fintrack.utils.formatRupiah
 import com.example.fintrack.viewmodel.MainViewModel
+import androidx.compose.material.icons.filled.Assessment
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     viewModel: MainViewModel,
+    onNavigateToAnalytics: () -> Unit,
     onNavigateToAddTransaction: () -> Unit,
     onNavigateToEditTransaction: (Transaction) -> Unit,
     onLogout: () -> Unit
@@ -76,6 +78,16 @@ fun HomeScreen(
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 ),
                 actions = {
+
+                    // 🔥 Tombol Analytics (grafik)
+                    IconButton(onClick = onNavigateToAnalytics) {
+                        Icon(
+                            Icons.Default.Assessment,   // pakai Assessment biar aman
+                            contentDescription = "Analytics"
+                        )
+                    }
+
+                    // 🔒 Tombol Logout
                     IconButton(onClick = onLogout) {
                         Icon(Icons.Default.ExitToApp, contentDescription = "Logout")
                     }

@@ -32,3 +32,9 @@ google-services.json
 
 # Android Profiling
 *.hprof
+"app/src/main/assets/local.properties" 
+"app/src/main/assets/" 
+"app/src/main/assets/local.properties" 
+"app/src/main/assets/" 
+"app/src/main/assets/gemini.properties" 
+"app/src/main/assets/" 

@@ -225,10 +225,10 @@ fun AutoResizedText(
     maxFontSize: TextUnit = MaterialTheme.typography.headlineSmall.fontSize,
     minFontSize: TextUnit = 12.sp
 ) {
-    var textStyle by remember {
+    var textStyle by remember(text) { // ← key important!
         mutableStateOf(TextStyle(fontSize = maxFontSize, fontWeight = fontWeight, color = color))
     }
-    var ready by remember { mutableStateOf(false) }
+    var ready by remember(text) { mutableStateOf(false) }
 
     Text(
         text = text,

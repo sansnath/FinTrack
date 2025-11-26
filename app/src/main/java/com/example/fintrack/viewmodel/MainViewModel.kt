@@ -21,27 +21,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var transactions by mutableStateOf<List<Transaction>>(emptyList())
         private set
 
-    var totalIncome by mutableStateOf(0.0)
-        private set
-
-    var totalExpense by mutableStateOf(0.0)
-        private set
-
-    var balance by mutableStateOf(0.0)
-        private set
-
     var isLoading by mutableStateOf(false)
         private set
 
     var errorMessage by mutableStateOf<String?>(null)
         private set
 
-    // === Firestore Listener ===
+    // === FIRESTORE ===
     private var transactionListener: ListenerRegistration? = null
-    private var listenerRegistered = false
 
 
-    // INIT ---------------------------------------------------------
+    // === COMPUTED SUMMARY (SELALU REAKTIF) ===
+    val totalIncome: Double
+        get() = transactions.filter { it.type == "income" }.sumOf { it.amount }
+
+    val totalExpense: Double
+        get() = transactions.filter { it.type == "expense" }.sumOf { it.amount }
+
+    val balance: Double
+        get() = totalIncome - totalExpense
+
+
+    // INIT -----------------------------------------------------------
     init {
         auth.currentUser?.uid?.let {
             loadCurrentUser {
@@ -51,7 +52,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
 
-    // REGISTER ------------------------------------------------------
+    // REGISTER -------------------------------------------------------
     fun register(name: String, email: String, password: String, onSuccess: () -> Unit) {
         if (name.isBlank() || email.isBlank() || password.isBlank()) {
             errorMessage = "All fields are required"
@@ -63,7 +64,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         auth.createUserWithEmailAndPassword(email, password)
             .addOnSuccessListener { result ->
                 val uid = result.user!!.uid
-
                 val userData = mapOf(
                     "id" to uid,
                     "name" to name,
@@ -74,23 +74,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     .document(uid)
                     .set(userData)
                     .addOnSuccessListener {
-                        errorMessage = null
                         isLoading = false
+                        errorMessage = null
                         onSuccess()
                     }
                     .addOnFailureListener { e ->
-                        errorMessage = "Failed to save user: ${e.message}"
                         isLoading = false
+                        errorMessage = e.message
                     }
             }
             .addOnFailureListener { e ->
-                errorMessage = e.message
                 isLoading = false
+                errorMessage = e.message
             }
     }
 
 
-    // LOGIN ---------------------------------------------------------
+    // LOGIN ----------------------------------------------------------
     fun login(email: String, password: String, onSuccess: () -> Unit) {
         if (email.isBlank() || password.isBlank()) {
             errorMessage = "Email and password are required"
@@ -106,19 +106,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                 loadCurrentUser {
                     startTransactionListener()
-                    errorMessage = null
                     isLoading = false
+                    errorMessage = null
                     onSuccess()
                 }
             }
             .addOnFailureListener { e ->
-                errorMessage = e.message
                 isLoading = false
+                errorMessage = e.message
             }
     }
 
 
-    // LOAD USER -----------------------------------------------------
+    // LOAD USER ------------------------------------------------------
     private fun loadCurrentUser(onLoaded: () -> Unit) {
         val uid = auth.currentUser?.uid ?: return
 
@@ -142,13 +142,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
 
-    // FIRESTORE REALTIME LISTENER -----------------------------------
+    // FIRESTORE LISTENER ---------------------------------------------
     private fun startTransactionListener() {
         val uid = auth.currentUser?.uid ?: return
 
         Log.d("DEBUG", "Starting listener for uid=$uid")
-
-        listenerRegistered = true
 
         transactionListener = db.collection("transactions")
             .whereEqualTo("userId", uid)
@@ -174,30 +172,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         )
                     }
 
+                    Log.d("DEBUG", "Snapshot triggered: items=${list.size}")
+
                     transactions = list
-                    calculateSummary()
                 }
             }
     }
 
-
     private fun stopTransactionListener() {
         transactionListener?.remove()
         transactionListener = null
-        listenerRegistered = false
         Log.d("DEBUG", "Transaction listener STOPPED")
     }
 
 
-    private fun calculateSummary() {
-        totalIncome = transactions.filter { it.type == "income" }.sumOf { it.amount }
-        totalExpense = transactions.filter { it.type == "expense" }.sumOf { it.amount }
-        balance = totalIncome - totalExpense
-    }
-
-
     // ADD ------------------------------------------------------------
-    fun addTransaction(title: String, amount: String, type: String, category: String, date: String, onSuccess: () -> Unit) {
+    fun addTransaction(
+        title: String,
+        amount: String,
+        type: String,
+        category: String,
+        date: String,
+        onSuccess: () -> Unit
+    ) {
         val uid = auth.currentUser?.uid ?: return
         val amountValue = amount.toDoubleOrNull() ?: 0.0
 
@@ -212,9 +209,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         db.collection("transactions")
             .add(data)
-            .addOnSuccessListener { onSuccess() }
+            .addOnSuccessListener {
+                onSuccess()
+            }
             .addOnFailureListener { e ->
-                errorMessage = "Failed to save transaction: ${e.message}"
+                errorMessage = e.message
             }
     }
 
@@ -243,9 +242,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         db.collection("transactions")
             .document(docId)
             .update(updates)
-            .addOnSuccessListener { onSuccess() }
+            .addOnSuccessListener {
+                onSuccess()
+            }
             .addOnFailureListener { e ->
-                errorMessage = "Failed to update: ${e.message}"
+                errorMessage = e.message
             }
     }
 
@@ -258,7 +259,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             .document(docId)
             .delete()
             .addOnFailureListener { e ->
-                errorMessage = "Failed to delete: ${e.message}"
+                errorMessage = e.message
             }
     }
 
@@ -279,9 +280,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         auth.signOut()
         currentUser = null
         transactions = emptyList()
-        totalIncome = 0.0
-        totalExpense = 0.0
-        balance = 0.0
         errorMessage = null
 
         Log.d("DEBUG", "User logged out and state cleared")

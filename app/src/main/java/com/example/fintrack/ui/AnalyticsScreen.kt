@@ -53,10 +53,9 @@ fun AnalyticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     val context = LocalContext.current
 
     var aiText by remember { mutableStateOf("Menghasilkan rekomendasi...") }
-    val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
-        scope.launch {
+        try {
             aiText = generateAiRecommendation(
                 context,
                 """
@@ -73,6 +72,8 @@ fun AnalyticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                 Berikan 1 paragraf rekomendasi singkat.
                 """.trimIndent()
             )
+        } catch (e: Exception) {
+            aiText = "Gagal memuat AI: ${e.message}"
         }
     }
 
@@ -146,30 +147,20 @@ fun AnalyticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
 
-                Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                     Box(
-                        modifier = Modifier
-                            .size(14.dp)
-                            .background(Color(0xFF4CAF50))
+                        modifier = Modifier.size(14.dp).background(Color(0xFF4CAF50))
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    AutoSmallText(text = "Income: ${formatRupiah(income)}", color = Color.White)
+                    AutoSmallText("Income: ${formatRupiah(income)}", Color.White)
                 }
 
-                Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                     Box(
-                        modifier = Modifier
-                            .size(14.dp)
-                            .background(Color(0xFFF44336))
+                        modifier = Modifier.size(14.dp).background(Color(0xFFF44336))
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    AutoSmallText(text = "Expense: ${formatRupiah(expense)}", color = Color.White)
+                    AutoSmallText("Expense: ${formatRupiah(expense)}", Color.White)
                 }
             }
 
@@ -189,6 +180,7 @@ fun AnalyticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                         .verticalScroll(rememberScrollState())
                 ) {
 
+                    // Bullet — left aligned
                     Text(
                         text = bulletText,
                         color = Color.White,
@@ -198,6 +190,7 @@ fun AnalyticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
 
                     Spacer(modifier = Modifier.height(12.dp))
 
+                    // Paragraph — justified
                     Text(
                         text = paragraphText,
                         color = Color.White,
@@ -220,8 +213,6 @@ fun AutoSmallText(text: String, color: Color) {
         fontSize = fontSize,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
-        onTextLayout = {
-            if (it.didOverflowWidth) fontSize *= 0.85f
-        }
+        onTextLayout = { if (it.didOverflowWidth) fontSize *= 0.85f }
     )
 }

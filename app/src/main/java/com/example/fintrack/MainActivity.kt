@@ -114,7 +114,6 @@ fun FinTrackApp(viewModel: MainViewModel) {
             }
         }
 
-        // 🔥 NEW: ANALYTICS SCREEN
         composable("analytics") {
             AnalyticsScreen(
                 viewModel = viewModel,
